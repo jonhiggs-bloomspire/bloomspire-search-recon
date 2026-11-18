@@ -36,7 +36,9 @@ The dev server does not use that UMD entry. `npm start` loads `src/devIndex.js`,
 
 - `listRuns`
 - `getRun(runId)`
-- `startRun({ recordTypes, options })`
+- `getSetup()`
+- `saveSetup(setups, { existingBusComps })`
+- `startRun({ recordTypes, options, setup })`
 - `pauseRun(runId)`
 - `resumeRun(runId)`
 - `getFindings(runId, { filters, page })`
@@ -47,13 +49,13 @@ The dev server does not use that UMD entry. `npm start` loads `src/devIndex.js`,
 
 ## Record types and the index
 
-There are three record types: Individual, Entity, and Opportunity. Display labels live in `RECORD_TYPES` in `src/config.js`. Opportunity's label is Lead.
+Record types come from setup rows (`GetSetup`) and from each run's `runConfig`. The screen labels a finding with the stored record type. The built-in defaults are Individual, Entity, and Opportunity. Other types are added as setup rows. The mock is the only place those three defaults are hardcoded.
 
-Search documents live under one alias, `bloomspire`. A document has `record_type` and nested objects `individual`, `entity`, and `opportunity`. Each nested object has `id` (the Siebel ROW_ID, also the Elasticsearch `_id`) and `last_updated`. `last_updated` uses Siebel's clock format, for example `11/5/2025 11:41:37 AM`. Parsing is in `src/dates.js`. The string has no time zone. Siebel and the index must already use the same zone. The UI keeps the original text on screen.
+Search documents live under one alias, `bloomspire`. Each setup row stores the dotted paths for the type value, the Siebel id, the last-updated value, and the name. The built-in defaults use `record_type`, `_id`, and paths such as `individual.last_updated`. `last_updated` uses Siebel's clock format, for example `11/5/2025 11:41:37 AM`. Parsing is in `src/dates.js`. The string has no time zone. Siebel and the index must already use the same zone. The UI keeps the original text on screen.
 
 ## Checks
 
-Each run can include all three record types. For every selected type the service classifies rows as:
+A run includes the active setup rows, or a subset chosen at start. For every selected type the service classifies rows as:
 
 - **Siebel only.** The row is in Siebel and missing from the index.
 - **ES only.** The id is still in the index after it should have been removed, for example after a failed delete.
@@ -78,7 +80,9 @@ Compare keys a finding by `record_type + id + check`.
 - **Resolved** is in the baseline run only.
 - **Still open** is in both.
 
-`src/compareFindings.js` is the rule the mock uses. The business service is expected to use the same key. CSV export uses the current findings filter and is not limited to the visible page. The builder is `src/csv.js`. The record type column stores `Opportunity`, not the Lead label.
+`src/compareFindings.js` is the rule the mock uses. The business service is expected to use the same key. Sort order follows the run's type order when the caller has it. CSV export uses the current findings filter and is not limited to the visible page. The builder is `src/csv.js`. The record type column stores the setup row's record type.
+
+Search spec, chunk size, and PIT keep-alive are not on the run header and are not system preferences. The run summary shows them from `runConfig`, the read-only snapshot taken at `StartRun`.
 
 ## View detail
 

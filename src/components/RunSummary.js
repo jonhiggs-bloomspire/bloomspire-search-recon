@@ -3,6 +3,7 @@ import { overallCounts } from "../counts";
 import { labelForRecordType } from "../config";
 import { RecordTypeBadge, StatusBadge } from "./badges";
 import { ErrorNote, LoadingNote } from "./notices";
+import { RunConfigTable } from "./RunConfigTable";
 
 const COLUMNS = [
   ["siebel", "Siebel count"],
@@ -151,6 +152,9 @@ export function RunSummary({ api, runId }) {
               Siebel and Elasticsearch timestamps are compared as clock times. The time zones must match.
             </p>
           </div>
+          <h3>Run config</h3>
+          <p>Search spec, chunk size, and PIT keep-alive are the values this run used. Later edits to setup do not change them.</p>
+          <RunConfigTable runConfig={run.runConfig} />
           <table>
             <caption>Counts by record type</caption>
             <thead>

@@ -1,5 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { createSeedState } from "./api/fixtures";
 import { createMockReconApi } from "./api/mockReconApi";
 import { App } from "./App";
 
@@ -14,12 +15,20 @@ async function go(hash) {
 
 test("renders setup, history, a completed summary, and a started run", async () => {
   const user = userEvent.setup();
-  const api = createMockReconApi();
+  const state = createSeedState();
+  state.runs.forEach((run) => {
+    if (run.status === "running" || run.status === "paused") {
+      run.status = "done";
+      run.partial = false;
+      run.endedAt = run.startedAt;
+    }
+  });
+  const api = createMockReconApi(state);
   window.location.hash = "#/setup";
   render(<App api={api} config={config} />);
   expect(screen.getByRole("heading", { name: "Bloomspire Search Recon" })).toBeInTheDocument();
   expect(screen.getByText("MOCK DATA")).toBeInTheDocument();
-  expect(screen.getByRole("checkbox", { name: "Lead" })).toBeChecked();
+  expect(await screen.findByRole("checkbox", { name: "Opportunity (Opportunity)" })).toBeChecked();
 
   await user.click(screen.getByRole("button", { name: "Start run" }));
   expect(await screen.findByRole("heading", { name: "Run summary" })).toBeInTheDocument();

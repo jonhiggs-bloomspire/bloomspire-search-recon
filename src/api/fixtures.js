@@ -10,6 +10,95 @@ export const RUN_IDS = {
 
 const ALL_TYPES = ["Individual", "Entity", "Opportunity"];
 
+export function builtinSetups() {
+  return [
+    {
+      recordType: "Individual",
+      busComp: "Contact",
+      busObj: "BSPRE ES Individual",
+      intObj: "BSPRE ES Individual",
+      active: true,
+      searchSpec: null,
+      chunkSize: 500,
+      pitKeepAlive: "10m",
+      esTypePath: "record_type",
+      esTypeValue: "Individual",
+      esIdPath: "_id",
+      esUpdatedPath: "individual.last_updated",
+      siebelNameFields: "First Name,Last Name",
+      esNamePaths: "individual.first_name,individual.last_name",
+      typeSeq: 1,
+    },
+    {
+      recordType: "Entity",
+      busComp: "Account",
+      busObj: "BSPRE ES Entity",
+      intObj: "BSPRE ES Entity",
+      active: true,
+      searchSpec: null,
+      chunkSize: 500,
+      pitKeepAlive: "10m",
+      esTypePath: "record_type",
+      esTypeValue: "Entity",
+      esIdPath: "_id",
+      esUpdatedPath: "entity.last_updated",
+      siebelNameFields: "Name",
+      esNamePaths: "entity.name",
+      typeSeq: 2,
+    },
+    {
+      recordType: "Opportunity",
+      busComp: "Opportunity",
+      busObj: "BSPRE ES Opportunity",
+      intObj: "BSPRE ES Opportunity",
+      active: true,
+      searchSpec: null,
+      chunkSize: 500,
+      pitKeepAlive: "10m",
+      esTypePath: "record_type",
+      esTypeValue: "Opportunity",
+      esIdPath: "_id",
+      esUpdatedPath: "opportunity.last_updated",
+      siebelNameFields: "Name",
+      esNamePaths: "opportunity.name",
+      typeSeq: 3,
+    },
+  ];
+}
+
+export function fillBuiltinSetup(row) {
+  const source = row && typeof row === "object" ? { ...row } : {};
+  const busComp = source.busComp == null ? "" : String(source.busComp).trim();
+  const recordType = source.recordType == null ? "" : String(source.recordType).trim();
+  const match = builtinSetups().find(
+    (item) => item.busComp === busComp || (recordType && item.recordType === recordType)
+  );
+  if (!match) {
+    return source;
+  }
+  const next = { ...source };
+  Object.keys(match).forEach((key) => {
+    if (key === "searchSpec" || key === "active" || key === "chunkSize" || key === "pitKeepAlive") {
+      return;
+    }
+    if (next[key] == null || String(next[key]).trim() === "") {
+      next[key] = match[key];
+    }
+  });
+  return next;
+}
+
+function snapshot(changes) {
+  const rows = builtinSetups();
+  (changes || []).forEach((change) => {
+    const row = rows.find((item) => item.busComp === change.busComp);
+    if (row) {
+      Object.assign(row, change);
+    }
+  });
+  return rows;
+}
+
 function finding(fields) {
   return {
     siebelLastUpdated: null,
@@ -34,6 +123,7 @@ function makeRun({
   findings,
   matchedByType,
   recordTypes = ALL_TYPES,
+  runConfig,
 }) {
   return {
     run: {
@@ -49,6 +139,7 @@ function makeRun({
       chunksTotal,
       lastCheckpoint,
       errorMessage: errorMessage || null,
+      runConfig: runConfig || snapshot(),
       counts: buildCounts(recordTypes, findings, matchedByType),
     },
     findings,
@@ -266,6 +357,14 @@ const seeded = [
     lastCheckpoint: "Opportunity 1-OPP21",
     findings: currentFindings,
     matchedByType: { Individual: 128, Entity: 86, Opportunity: 41 },
+    runConfig: snapshot([
+      {
+        busComp: "Contact",
+        searchSpec: '[Last Name] = "Hale"',
+        chunkSize: 250,
+        pitKeepAlive: "5m",
+      },
+    ]),
   }),
   makeRun({
     id: RUN_IDS.baseline,
@@ -303,6 +402,8 @@ export function createSeedState() {
     JSON.stringify({
       runs: seeded.map((entry) => entry.run),
       findings: Object.fromEntries(seeded.map((entry) => [entry.run.id, entry.findings])),
+      setups: builtinSetups(),
+      setupSource: "seed",
     })
   );
 }

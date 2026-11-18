@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { RUN_IDS } from "../api/fixtures";
 import { createMockReconApi } from "../api/mockReconApi";
@@ -7,7 +7,13 @@ import { RunSummary } from "./RunSummary";
 test("shows completed counts and hides compare for a partial run", async () => {
   render(<RunSummary api={createMockReconApi()} runId={RUN_IDS.current} />);
   expect(await screen.findByRole("columnheader", { name: "Siebel count" })).toBeInTheDocument();
-  expect(screen.getByRole("row", { name: /Lead/ })).toHaveTextContent("43");
+  const counts = screen.getByRole("table", { name: "Counts by record type" });
+  expect(within(counts).getByRole("row", { name: /Opportunity/ })).toHaveTextContent("43");
+  const config = screen.getByRole("table", { name: "Setup used by this run" });
+  expect(config).toHaveTextContent('[Last Name] = "Hale"');
+  expect(config).toHaveTextContent("250");
+  expect(config).toHaveTextContent("5m");
+  expect(screen.getByRole("heading", { name: "Run config" })).toBeInTheDocument();
   expect(screen.getByRole("row", { name: /Overall/ })).toHaveTextContent("262");
   expect(screen.getByText(/time zones must match/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "View findings" })).toHaveAttribute(

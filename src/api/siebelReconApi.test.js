@@ -92,7 +92,7 @@ test("maps start, pause, resume, findings, compare, and export", async () => {
     "RUN-9"
   );
   expect(bodyOf(calls[0]).body).toEqual({
-    RecordTypes: "Entity,Opportunity",
+    RecordTypes: "Opportunity,Entity",
     ToleranceSeconds: "5",
   });
   await api.getRun("RUN-9");
@@ -119,6 +119,98 @@ test("maps start, pause, resume, findings, compare, and export", async () => {
   const file = await api.exportCsv("RUN-9", { filters: { id: "1-IND10" } });
   expect(file).toEqual({ filename: "recon-RUN-9.csv", csv: "id\r\n1-IND10" });
   expect(calls.every((call) => call.url.includes("/service/") && !call.url.includes(":9200"))).toBe(true);
+});
+
+test("loads setup, saves rows, and starts from the active setup", async () => {
+  const setups = JSON.stringify([
+    {
+      recordType: "Individual",
+      busComp: "Contact",
+      busObj: "BSPRE ES Individual",
+      intObj: "BSPRE ES Individual",
+      active: true,
+      searchSpec: null,
+      chunkSize: 500,
+      pitKeepAlive: "10m",
+      esTypePath: "record_type",
+      esTypeValue: "Individual",
+      esIdPath: "_id",
+      esUpdatedPath: "individual.last_updated",
+      siebelNameFields: "First Name,Last Name",
+      esNamePaths: "individual.first_name,individual.last_name",
+      typeSeq: 1,
+    },
+  ]);
+  const responses = [
+    { Setups: setups, Source: "seed" },
+    { Setups: setups, Source: "table" },
+    {
+      Run: JSON.stringify({
+        id: "RUN-3",
+        errorMessage: null,
+        endedAt: null,
+        runConfig: [
+          {
+            recordType: "Individual",
+            busComp: "Contact",
+            searchSpec: '[Last Name] = "Doe"',
+            chunkSize: 3,
+            pitKeepAlive: "5m",
+            active: true,
+            typeSeq: 1,
+          },
+        ],
+      }),
+    },
+    { Run: JSON.stringify({ id: "RUN-4", runConfig: "[]" }) },
+  ];
+  const calls = [];
+  const fetchImpl = jest.fn(async (url, options) => {
+    calls.push({ url, options });
+    return { ok: true, status: 200, json: async () => responses.shift() };
+  });
+  const api = createSiebelReconApi(
+    { siebelBaseUrl: "/siebel/v1.0", siebelUsername: "demo-user", siebelPassword: "redacted-value" },
+    { fetchImpl }
+  );
+
+  const seeded = await api.getSetup();
+  expect(seeded.source).toBe("seed");
+  expect(seeded.setups[0].searchSpec).toBe("");
+  expect(calls[0].url).toContain("/GetSetup");
+  expect(bodyOf(calls[0])).toEqual({ body: {} });
+
+  const row = {
+    ...seeded.setups[0],
+    searchSpec: '[Last Name] = "Doe"',
+    chunkSize: 3,
+  };
+  const saved = await api.saveSetup([row], { existingBusComps: [] });
+  expect(saved.source).toBe("table");
+  expect(JSON.parse(bodyOf(calls[1]).body.Setups)[0]).toMatchObject({
+    busComp: "Contact",
+    searchSpec: '[Last Name] = "Doe"',
+    chunkSize: 3,
+    pitKeepAlive: "10m",
+  });
+
+  const started = await api.startRun({
+    options: { toleranceSeconds: 0 },
+    setup: [{ busComp: "Contact", searchSpec: '[Last Name] = "Doe"', chunkSize: 3, pitKeepAlive: "5m" }],
+  });
+  expect(bodyOf(calls[2]).body.RecordTypes).toBeUndefined();
+  expect(bodyOf(calls[2]).body.ToleranceSeconds).toBe("0");
+  expect(JSON.parse(bodyOf(calls[2]).body.Setup)).toEqual([
+    { busComp: "Contact", searchSpec: '[Last Name] = "Doe"', chunkSize: 3, pitKeepAlive: "5m" },
+  ]);
+  expect(started.runConfig[0].searchSpec).toBe('[Last Name] = "Doe"');
+  expect(started.runConfig[0].chunkSize).toBe(3);
+
+  const plain = await api.startRun({});
+  expect(plain.id).toBe("RUN-4");
+  expect(plain.runConfig).toEqual([]);
+  expect(bodyOf(calls[3]).body).toEqual({ ToleranceSeconds: "0" });
+  expect(calls.every((call) => !call.url.includes(":9200"))).toBe(true);
 });
 
 test("surfaces HTTP failures and Siebel ERROR text", async () => {

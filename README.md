@@ -4,7 +4,9 @@ React admin view for Siebel Open UI. It reconciles Siebel, the system of record,
 
 The browser never calls Elasticsearch. It calls the Siebel business service `BSPRE Elasticsearch Recon` over Siebel REST. Local development uses an in-memory mock.
 
-Record types are Individual, Entity, and Opportunity. The screen labels Opportunity as **Lead**. The stored `record_type` stays `Opportunity`.
+Record types come from setup, one row per business component. The Setup screen lists, adds, and edits those rows. There is no delete: clear Active to leave a component out of new runs. A run keeps a read-only copy of the setup it used. The mock starts from the built-in Individual, Entity, and Opportunity defaults until they are saved. The screen shows each row's record type as stored.
+
+The only new system preference is `BSPRE Elasticsearch Recon URL`. Set it to the Elasticsearch base URL plus the alias, for example `https://<es-host>:9200/bloomspire`. Chunk size, PIT keep-alive, and search spec are not system preferences. They live on `CX_ES_RCN_SETUP`, and each run copies them onto `CX_ES_RCN_RUN_CFG`.
 
 ## Quick start
 

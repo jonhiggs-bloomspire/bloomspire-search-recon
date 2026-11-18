@@ -1,21 +1,10 @@
-import {
-  CHECKS,
-  DEFAULT_PAGE_SIZE,
-  ES_ALIAS,
-  RECORD_TYPES,
-  isKnownRecordType,
-  labelForCheck,
-  labelForRecordType,
-  labelForStatus,
-  readConfig,
-} from "./config";
+import { CHECKS, DEFAULT_PAGE_SIZE, ES_ALIAS, labelForCheck, labelForRecordType, labelForStatus, readConfig } from "./config";
 
-test("record types stay Individual, Entity, and Opportunity, labeled Lead", () => {
-  expect(RECORD_TYPES.map((type) => type.value)).toEqual(["Individual", "Entity", "Opportunity"]);
-  expect(labelForRecordType("Opportunity")).toBe("Lead");
+test("record type labels come from the stored value", () => {
+  expect(labelForRecordType("Opportunity")).toBe("Opportunity");
   expect(labelForRecordType("Individual")).toBe("Individual");
-  expect(isKnownRecordType("Opportunity")).toBe(true);
-  expect(isKnownRecordType("Account")).toBe(false);
+  expect(labelForRecordType("Case")).toBe("Case");
+  expect(labelForRecordType("")).toBe("");
   expect(ES_ALIAS).toBe("bloomspire");
   expect(CHECKS.map((check) => check.value)).toEqual(["siebel_only", "es_only", "stale"]);
   expect(labelForCheck("siebel_only")).toBe("Siebel only");

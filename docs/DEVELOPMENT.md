@@ -55,8 +55,8 @@ BSPRE_RECON_API=siebel BSPRE_SIEBEL_USERNAME=SADMIN BSPRE_SIEBEL_PASSWORD=<passw
 
 ## Mock behavior
 
-Pause and resume change the in-memory status. They do not move `chunksDone`. `startRun` adds a running partial run with empty counts. Seeded findings were already classified with that run's tolerance. The stale rule itself is `isStale` in `src/dates.js`.
+Pause and resume change the in-memory status. They do not move `chunksDone`. `GetSetup` starts with `Source` `seed` and the three built-in rows. `SaveSetup` writes them and later reads return `Source` `table`. The first save while the source is still `seed` should send every row, or the unsaved defaults disappear once the table is no longer empty. `startRun` copies the active rows (or the built-in defaults when none are active) onto `runConfig`, then adds a running partial run with empty counts. It rejects the call when another run is running or paused. Seeded findings were already classified with that run's tolerance. The stale rule itself is `isStale` in `src/dates.js`.
 
 ## Out of scope
 
-Do not add record types. Do not add requeue or failure-correlation controls. Do not call Elasticsearch from the browser.
+Do not hardcode a record-type list outside the mock defaults. Do not add requeue or failure-correlation controls. Do not call Elasticsearch from the browser.

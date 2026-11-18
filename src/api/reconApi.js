@@ -9,7 +9,9 @@ import { createSiebelReconApi } from "./siebelReconApi";
  *
  * listRuns()
  * getRun(runId)
- * startRun({ recordTypes, options })
+ * getSetup()
+ * saveSetup(setups, { existingBusComps })
+ * startRun({ recordTypes, options, setup })
  * pauseRun(runId)
  * resumeRun(runId)
  * getFindings(runId, { filters, page })

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { CHECKS, RECORD_TYPES } from "../config";
+import { CHECKS } from "../config";
+import { recordTypesFromRun } from "../setupRows";
 import { downloadTextFile } from "../download";
 import { siebelDetailUrl } from "../siebelDetailUrl";
 import { CheckLabel, RecordTypeBadge } from "./badges";
@@ -18,6 +19,7 @@ export function FindingsDetail({ api, runId, pageSize = 10, appBase = "" }) {
   const [result, setResult] = useState(null);
   const [error, setError] = useState("");
   const [exporting, setExporting] = useState(false);
+  const [recordTypes, setRecordTypes] = useState([]);
 
   const filters = { recordType, check, id: appliedId };
 
@@ -25,10 +27,10 @@ export function FindingsDetail({ api, runId, pageSize = 10, appBase = "" }) {
     let cancelled = false;
     setResult(null);
     setError("");
-    api
-      .getFindings(runId, { filters, page: { page, pageSize } })
-      .then((next) => {
+    Promise.all([api.getRun(runId), api.getFindings(runId, { filters, page: { page, pageSize } })])
+      .then(([run, next]) => {
         if (!cancelled) {
+          setRecordTypes(recordTypesFromRun(run));
           setResult(next);
         }
       })
@@ -70,7 +72,7 @@ export function FindingsDetail({ api, runId, pageSize = 10, appBase = "" }) {
     <section data-screen="findings">
       <h2>Findings</h2>
       <p>
-        Run {runId}. Each id opens the Siebel record. The stored record type for a lead stays Opportunity.
+        Run {runId}. Each id opens the Siebel record when a detail view is known for that record type.
       </p>
       <form className="bspre-toolbar" onSubmit={applyId}>
         <label htmlFor="finding-type">
@@ -84,9 +86,9 @@ export function FindingsDetail({ api, runId, pageSize = 10, appBase = "" }) {
             }}
           >
             <option value="">All types</option>
-            {RECORD_TYPES.map((type) => (
-              <option key={type.value} value={type.value}>
-                {type.label}
+            {recordTypes.map((type) => (
+              <option key={type} value={type}>
+                {type}
               </option>
             ))}
           </select>

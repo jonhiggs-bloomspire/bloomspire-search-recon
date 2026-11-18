@@ -2,13 +2,17 @@ import { sortFindings, compareFindings } from "../compareFindings";
 import { findingsToCsv } from "../csv";
 import { formatSiebelDateTime } from "../dates";
 import { parseSiebelDateTime } from "../dates";
-import { createSeedState } from "./fixtures";
+import { presentSetups, sortSetups } from "../setupRows";
+import { builtinSetups, createSeedState, fillBuiltinSetup } from "./fixtures";
 import {
   normalizeFilters,
   normalizePage,
   normalizeRecordTypes,
+  normalizeSetups,
+  normalizeStartOverrides,
   normalizeTolerance,
   ReconApiError,
+  SETUPS_ARRAY_ERROR,
 } from "./contract";
 
 function clone(value) {
@@ -28,6 +32,20 @@ function matches(finding, filters) {
   return true;
 }
 
+function byTypeSeq(a, b) {
+  const seq = (Number(a.typeSeq) || 0) - (Number(b.typeSeq) || 0);
+  if (seq !== 0) {
+    return seq;
+  }
+  return String(a.recordType || "").localeCompare(String(b.recordType || ""));
+}
+
+function presentRun(run) {
+  const copy = clone(run);
+  copy.runConfig = presentSetups(copy.runConfig || []);
+  return copy;
+}
+
 function assertComparable(run, otherId) {
   if (!run) {
     throw new ReconApiError("Run not found.");
@@ -40,8 +58,15 @@ function assertComparable(run, otherId) {
   }
 }
 
-export function createMockReconApi() {
-  const state = createSeedState();
+export function createMockReconApi(initialState) {
+  const state = clone(initialState || createSeedState());
+  if (!Array.isArray(state.setups)) {
+    state.setups = builtinSetups();
+    state.setupSource = state.setupSource || "seed";
+  }
+  if (!state.setupSource) {
+    state.setupSource = "table";
+  }
 
   function requireRun(runId) {
     const run = state.runs.find((item) => item.id === runId);
@@ -51,8 +76,64 @@ export function createMockReconApi() {
     return run;
   }
 
+  function typeOrderFor(run) {
+    const configs = run && Array.isArray(run.runConfig) && run.runConfig.length ? run.runConfig : state.setups;
+    return [...configs].sort(byTypeSeq).map((row) => row.recordType);
+  }
+
+  function activeCatalog() {
+    const active = state.setups.filter((row) => row.active !== false);
+    if (active.length) {
+      return active;
+    }
+    return builtinSetups();
+  }
+
+  function selectRows(tokens) {
+    const catalog = activeCatalog();
+    if (!tokens.length) {
+      return [...catalog].sort(byTypeSeq);
+    }
+    const selected = [];
+    tokens.forEach((token) => {
+      const matches = catalog.filter((row) => row.busComp === token || row.recordType === token);
+      if (!matches.length) {
+        throw new ReconApiError(`Unknown record type: ${token}`);
+      }
+      matches.forEach((row) => {
+        if (!selected.some((item) => item.busComp === row.busComp)) {
+          selected.push(row);
+        }
+      });
+    });
+    return selected.sort(byTypeSeq);
+  }
+
+  function applyOverrides(rows, overrides) {
+    return rows.map((row) => {
+      const override = overrides.find(
+        (item) =>
+          (item.busComp && item.busComp === row.busComp) || (item.recordType && item.recordType === row.recordType)
+      );
+      if (!override) {
+        return clone(row);
+      }
+      const next = clone(row);
+      if (Object.prototype.hasOwnProperty.call(override, "searchSpec")) {
+        next.searchSpec = override.searchSpec;
+      }
+      if (Object.prototype.hasOwnProperty.call(override, "chunkSize")) {
+        next.chunkSize = override.chunkSize;
+      }
+      if (Object.prototype.hasOwnProperty.call(override, "pitKeepAlive")) {
+        next.pitKeepAlive = override.pitKeepAlive;
+      }
+      return next;
+    });
+  }
+
   async function listRuns() {
-    const runs = [...state.runs].sort((a, b) => {
+    const runs = state.runs.map(presentRun).sort((a, b) => {
       const aTime = parseSiebelDateTime(a.startedAt);
       const bTime = parseSiebelDateTime(b.startedAt);
       const delta = (bTime ? bTime.getTime() : 0) - (aTime ? aTime.getTime() : 0);
@@ -61,17 +142,60 @@ export function createMockReconApi() {
       }
       return String(b.id).localeCompare(String(a.id));
     });
-    return clone(runs);
+    return runs;
   }
 
   async function getRun(runId) {
-    return clone(requireRun(runId));
+    return presentRun(requireRun(runId));
   }
 
-  async function startRun({ recordTypes, options } = {}) {
-    const types = normalizeRecordTypes(recordTypes);
+  async function getSetup() {
+    return {
+      setups: presentSetups(state.setups),
+      source: state.setupSource,
+    };
+  }
+
+  async function saveSetup(setups) {
+    if (!Array.isArray(setups) || setups.length === 0) {
+      throw new ReconApiError(SETUPS_ARRAY_ERROR);
+    }
+    const existing =
+      state.setupSource === "seed" ? [] : state.setups.map((row) => row.busComp);
+    const filled = setups.map((row) => {
+      const busComp = row && row.busComp != null ? String(row.busComp).trim() : "";
+      if (busComp && !existing.includes(busComp)) {
+        return fillBuiltinSetup(row);
+      }
+      return row;
+    });
+    const rows = normalizeSetups(filled, existing);
+    if (state.setupSource === "seed") {
+      state.setups = [];
+    }
+    rows.forEach((row) => {
+      const index = state.setups.findIndex((item) => item.busComp === row.busComp);
+      if (index >= 0) {
+        state.setups[index] = { ...state.setups[index], ...row };
+      } else {
+        state.setups.push(row);
+      }
+    });
+    state.setupSource = "table";
+    state.setups = sortSetups(state.setups);
+    return getSetup();
+  }
+
+  async function startRun({ recordTypes, options, setup } = {}) {
     const toleranceSeconds = normalizeTolerance(options);
-    const numbers = state.runs.map((run) => Number(String(run.id).replace("RUN-", "")));
+    const tokens = normalizeRecordTypes(recordTypes);
+    const overrides = normalizeStartOverrides(setup);
+    if (state.runs.some((run) => run.status === "running" || run.status === "paused")) {
+      throw new ReconApiError("A run is already running or paused.");
+    }
+    const selected = applyOverrides(selectRows(tokens), overrides);
+    const types = selected.map((row) => row.recordType);
+    const numbers = state.runs.map((run) => Number(String(run.id).replace(/\D/g, "")) || 0);
     const next = Math.max(...numbers, 1000) + 1;
     const id = `RUN-${next}`;
     const run = {
@@ -87,6 +211,7 @@ export function createMockReconApi() {
       chunksTotal: types.length * 8,
       lastCheckpoint: "",
       errorMessage: null,
+      runConfig: selected,
       counts: {},
     };
     types.forEach((type) => {
@@ -101,7 +226,7 @@ export function createMockReconApi() {
     });
     state.runs.push(run);
     state.findings[id] = [];
-    return clone(run);
+    return presentRun(run);
   }
 
   async function pauseRun(runId) {
@@ -111,7 +236,7 @@ export function createMockReconApi() {
     }
     run.status = "paused";
     run.partial = true;
-    return clone(run);
+    return presentRun(run);
   }
 
   async function resumeRun(runId) {
@@ -121,13 +246,16 @@ export function createMockReconApi() {
     }
     run.status = "running";
     run.partial = true;
-    return clone(run);
+    return presentRun(run);
   }
 
   function findingsFor(runId, filters) {
-    requireRun(runId);
+    const run = requireRun(runId);
     const rows = state.findings[runId] || [];
-    return sortFindings(rows.filter((finding) => matches(finding, filters)));
+    return sortFindings(
+      rows.filter((finding) => matches(finding, filters)),
+      typeOrderFor(run)
+    );
   }
 
   async function getFindings(runId, query = {}) {
@@ -151,7 +279,11 @@ export function createMockReconApi() {
     const current = requireRun(currentId);
     assertComparable(baseline);
     assertComparable(current);
-    const result = compareFindings(state.findings[baselineId] || [], state.findings[currentId] || []);
+    const result = compareFindings(
+      state.findings[baselineId] || [],
+      state.findings[currentId] || [],
+      typeOrderFor(current)
+    );
     return {
       baselineId,
       currentId,
@@ -173,6 +305,8 @@ export function createMockReconApi() {
   return {
     listRuns,
     getRun,
+    getSetup,
+    saveSetup,
     startRun,
     pauseRun,
     resumeRun,

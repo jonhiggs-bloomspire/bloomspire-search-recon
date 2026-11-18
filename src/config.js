@@ -1,11 +1,5 @@
 export const ES_ALIAS = "bloomspire";
 
-export const RECORD_TYPES = [
-  { value: "Individual", label: "Individual" },
-  { value: "Entity", label: "Entity" },
-  { value: "Opportunity", label: "Lead" },
-];
-
 export const CHECKS = [
   { value: "siebel_only", label: "Siebel only" },
   { value: "es_only", label: "ES only" },
@@ -17,8 +11,7 @@ export const RUN_STATUSES = ["running", "paused", "done", "error"];
 export const DEFAULT_PAGE_SIZE = 10;
 
 export function labelForRecordType(value) {
-  const found = RECORD_TYPES.find((type) => type.value === value);
-  return found ? found.label : value;
+  return value == null ? "" : String(value);
 }
 
 export function labelForCheck(value) {
@@ -31,10 +24,6 @@ export function labelForStatus(value) {
     return "";
   }
   return value.charAt(0).toUpperCase() + value.slice(1);
-}
-
-export function isKnownRecordType(value) {
-  return RECORD_TYPES.some((type) => type.value === value);
 }
 
 export function readConfig(overrides = {}) {

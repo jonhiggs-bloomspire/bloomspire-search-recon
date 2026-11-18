@@ -1,6 +1,6 @@
 import { findingKey } from "../compareFindings";
 import { parseSiebelDateTime } from "../dates";
-import { RUN_IDS } from "./fixtures";
+import { RUN_IDS, createSeedState } from "./fixtures";
 import { createMockReconApi } from "./mockReconApi";
 
 function keys(findings) {
@@ -81,26 +81,98 @@ describe("mock recon API", () => {
     await expect(api.compareRuns(RUN_IDS.current, RUN_IDS.current)).rejects.toThrow(/different/);
   });
 
-  test("starts, pauses, and resumes without sharing state across clients", async () => {
+  test("starts from the active setup, pauses, and resumes without sharing state", async () => {
     const api = createMockReconApi();
+    await expect(api.startRun({ options: { toleranceSeconds: 15 } })).rejects.toThrow(/running or paused/);
+
+    const state = createSeedState();
+    state.runs.forEach((run) => {
+      if (run.status === "running" || run.status === "paused") {
+        run.status = "done";
+        run.partial = false;
+        run.endedAt = run.startedAt;
+      }
+    });
+    const open = createMockReconApi(state);
     const other = createMockReconApi();
-    const started = await api.startRun({
+    const started = await open.startRun({
       recordTypes: ["Opportunity", "Entity"],
       options: { toleranceSeconds: 15 },
+      setup: [{ busComp: "Account", chunkSize: 3, pitKeepAlive: "5m", searchSpec: '[Name] = "North"' }],
     });
     expect(started.status).toBe("running");
     expect(started.partial).toBe(true);
     expect(started.recordTypes).toEqual(["Entity", "Opportunity"]);
     expect(started.toleranceSeconds).toBe(15);
+    expect(started.runConfig.map((row) => row.busComp)).toEqual(["Account", "Opportunity"]);
+    expect(started.runConfig[0]).toMatchObject({
+      chunkSize: 3,
+      pitKeepAlive: "5m",
+      searchSpec: '[Name] = "North"',
+    });
     expect(parseSiebelDateTime(started.startedAt)).toBeInstanceOf(Date);
 
-    const paused = await api.pauseRun(started.id);
+    const paused = await open.pauseRun(started.id);
     expect(paused.status).toBe("paused");
-    const resumed = await api.resumeRun(started.id);
+    const resumed = await open.resumeRun(started.id);
     expect(resumed.status).toBe("running");
-    await expect(api.pauseRun(RUN_IDS.current)).rejects.toThrow(/running/);
-    await expect(api.resumeRun(RUN_IDS.running)).rejects.toThrow(/paused/);
+    await expect(open.pauseRun(RUN_IDS.current)).rejects.toThrow(/running/);
+    await expect(open.resumeRun(RUN_IDS.running)).rejects.toThrow(/paused/);
     await expect(other.getRun(started.id)).rejects.toThrow(/Run not found/);
-    await expect(api.startRun({ recordTypes: [] })).rejects.toThrow(/at least one/);
+    await expect(createMockReconApi(state).startRun({ recordTypes: ["Missing"] })).rejects.toThrow(
+      /Unknown record type: Missing/
+    );
+  });
+
+  test("lists seed setup, saves rows, and deactivates instead of deleting", async () => {
+    const api = createMockReconApi();
+    const seeded = await api.getSetup();
+    expect(seeded.source).toBe("seed");
+    expect(seeded.setups).toHaveLength(3);
+
+    const saved = await api.saveSetup([
+      {
+        busComp: "Contact",
+        searchSpec: '[Last Name] = "Doe"',
+        chunkSize: 25,
+      },
+    ]);
+    expect(saved.source).toBe("table");
+    expect(saved.setups).toHaveLength(1);
+    expect(saved.setups[0]).toMatchObject({
+      recordType: "Individual",
+      busComp: "Contact",
+      searchSpec: '[Last Name] = "Doe"',
+      chunkSize: 25,
+      esUpdatedPath: "individual.last_updated",
+    });
+
+    const inactive = await api.saveSetup([{ busComp: "Contact", active: false }]);
+    expect(inactive.setups[0].active).toBe(false);
+    expect(await api.getSetup()).toEqual(inactive);
+
+    const state = (await import("./fixtures")).createSeedState();
+    state.runs.forEach((run) => {
+      if (run.status === "running" || run.status === "paused") {
+        run.status = "done";
+        run.partial = false;
+      }
+    });
+    state.setups = inactive.setups.map((row) => ({ ...row, searchSpec: row.searchSpec || null }));
+    state.setupSource = "table";
+    state.setups[0].active = false;
+    const idle = createMockReconApi(state);
+    const started = await idle.startRun({});
+    expect(started.recordTypes).toEqual(["Individual", "Entity", "Opportunity"]);
+    expect(started.runConfig.every((row) => row.active)).toBe(true);
+
+    await expect(api.saveSetup([{ chunkSize: 10 }])).rejects.toThrow(/busComp/);
+    await expect(api.saveSetup([{ busComp: "Contact", chunkSize: 9000 }])).rejects.toThrow(/1 to 5000/);
+    await expect(
+      api.saveSetup([
+        { busComp: "Contact", pitKeepAlive: "10m" },
+        { busComp: "Contact", pitKeepAlive: "1h" },
+      ])
+    ).rejects.toThrow(/duplicate busComp: Contact/);
   });
 });

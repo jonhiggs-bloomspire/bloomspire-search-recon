@@ -41,7 +41,7 @@ test("filters by type, check, and id", async () => {
   await user.click(screen.getByRole("button", { name: "Apply" }));
   expect(await screen.findByRole("link", { name: /1-OPP07/ })).toBeInTheDocument();
   expect(screen.getByText("Showing 1–1 of 1")).toBeInTheDocument();
-  expect(screen.getByRole("row", { name: /1-OPP07/ })).toHaveTextContent("Lead");
+  expect(screen.getByRole("row", { name: /1-OPP07/ })).toHaveTextContent("Opportunity");
 });
 
 test("exports the applied filter", async () => {

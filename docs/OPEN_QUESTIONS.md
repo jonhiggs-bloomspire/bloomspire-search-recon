@@ -8,7 +8,7 @@ These need a Siebel-side answer before the business service and the repository o
 
 3. **Name fields.** The finding `name` is optional. The proposal is Contact full name, Account name, and Opportunity name. Confirm the fields the service should read, and leave `name` null when the index orphan has no name.
 
-4. **Chunk size and checkpoint text.** The UI shows `chunksDone`, `chunksTotal`, and `lastCheckpoint` as the service sends them. The sample checkpoint is `Opportunity 1-OPP21`. Confirm the real chunk size and the checkpoint string.
+4. **Checkpoint text.** Chunk size, PIT keep-alive, and search spec are per business component on `CX_ES_RCN_SETUP` and on `CX_ES_RCN_RUN_CFG`. They are not system preferences. The UI shows `chunksDone`, `chunksTotal`, and `lastCheckpoint` as the service sends them. The sample checkpoint is `Opportunity 1-OPP21`. Confirm the checkpoint string.
 
 5. **Pause boundary.** The proposal is that pause and resume take effect on the next chunk boundary, not in the middle of a chunk. Confirm that the service can stop there and continue from `lastCheckpoint`.
 

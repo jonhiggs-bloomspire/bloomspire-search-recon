@@ -1,6 +1,6 @@
 # BSPRE Elasticsearch Recon
 
-Proposed Siebel business service. The React app is already written against this contract. The service does not exist yet.
+Siebel business service contract the React app calls. Setup rows and each run's `runConfig` snapshot are the source for record types, search spec, chunk size, and PIT keep-alive.
 
 The browser calls Siebel REST only. It does not call Elasticsearch.
 
@@ -30,7 +30,7 @@ Alias: `bloomspire`.
 }
 ```
 
-`record_type` is `Individual`, `Entity`, or `Opportunity`. The nested object for that type has `id` and `last_updated`. `id` is the Siebel ROW_ID and the Elasticsearch `_id`. The UI label for Opportunity is Lead. The service and the CSV keep `Opportunity`.
+The built-in defaults use `record_type` values Individual, Entity, and Opportunity, with id at `_id` and last-updated paths `individual.last_updated`, `entity.last_updated`, and `opportunity.last_updated`. Other setup rows set their own paths. The UI and the CSV show the record type stored on the setup row.
 
 ## Check rules
 
@@ -63,6 +63,25 @@ JSON stored in the `Run` property.
   "chunksTotal": 24,
   "lastCheckpoint": "Opportunity 1-OPP21",
   "errorMessage": null,
+  "runConfig": [
+    {
+      "recordType": "Individual",
+      "busComp": "Contact",
+      "busObj": "BSPRE ES Individual",
+      "intObj": "BSPRE ES Individual",
+      "active": true,
+      "searchSpec": null,
+      "chunkSize": 500,
+      "pitKeepAlive": "10m",
+      "esTypePath": "record_type",
+      "esTypeValue": "Individual",
+      "esIdPath": "_id",
+      "esUpdatedPath": "individual.last_updated",
+      "siebelNameFields": "First Name,Last Name",
+      "esNamePaths": "individual.first_name,individual.last_name",
+      "typeSeq": 1
+    }
+  ],
   "counts": {
     "Individual": {
       "siebel": 131,
@@ -76,7 +95,7 @@ JSON stored in the `Run` property.
 }
 ```
 
-`status` is `running`, `paused`, `done`, or `error`. `partial` is true until every chunk has finished. An error run stays partial. `endedAt` is null while the run is running or paused. `lastCheckpoint` is plain text the UI can show, proposed as `<record type> <ROW_ID>`. `counts` includes only the selected record types. Counts must match the finding rows: Siebel count = matched + siebelOnly + stale, and ES count = matched + esOnly + stale.
+`status` is `running`, `paused`, `done`, or `error`. `partial` is true until every chunk has finished. An error run stays partial. `endedAt` is null while the run is running or paused. `lastCheckpoint` is plain text the UI can show, proposed as `<record type> <ROW_ID>`. `runConfig` is the read-only setup snapshot for this run. Search spec, chunk size, and PIT keep-alive live there, not on the run header. `counts` includes only the selected record types. Counts must match the finding rows: Siebel count = matched + siebelOnly + stale, and ES count = matched + esOnly + stale.
 
 Chunking is part of the service. After each chunk, update `chunksDone`, `chunksTotal`, and `lastCheckpoint`. Pause takes effect on the next chunk boundary: set `status` to `paused` and leave `partial` true. Resume continues from the checkpoint and sets `status` back to `running`. A failed chunk sets `status` to `error`, `partial` true, `errorMessage`, and `endedAt`. The UI does not requeue.
 
@@ -109,14 +128,27 @@ Input: `RunId`
 
 Output: `Run` = JSON run object.
 
+### GetSetup
+
+Input body: `{}`
+
+Output: `Setups` = JSON array of setup rows, including inactive rows, in type order. `Source` is `table` when the rows were read from `CX_ES_RCN_SETUP`, or `seed` when the table was empty and the built-in defaults were returned without writing them.
+
+### SaveSetup
+
+Input: `Setups` = JSON array of setup rows, keyed by `busComp`. Rows are inserted or updated. They are not deleted; set `active` false instead. Blank `chunkSize` defaults to 500 and must be a whole number from 1 to 5000. Blank `pitKeepAlive` defaults to `10m` and must be a whole number plus `s`, `m`, `h`, or `d`, at most 10 characters. An insert needs `recordType`, `busComp`, `busObj`, `intObj`, `esTypePath`, `esTypeValue`, and `esUpdatedPath`. Fields omitted on an update stay as they are.
+
+Output: `Setups` for every row after the save, and `Source` `table`. Rule failures return `ERROR`.
+
 ### StartRun
 
 Input:
 
-- `RecordTypes`: comma-separated values in the set Individual, Entity, Opportunity. Example: `Entity,Opportunity`
-- `ToleranceSeconds`: whole number as a string, for example `60`
+- `RecordTypes`: optional comma-separated record types or business component names. Blank means every active setup row, or the built-in defaults when none are active. Unknown tokens return `Unknown record type: ...`.
+- `ToleranceSeconds`: whole number as a string, zero or more. Blank defaults to 0.
+- `Setup`: optional JSON array of per-component overrides. Each entry needs `recordType` or `busComp` and may set `searchSpec`, `chunkSize`, and `pitKeepAlive`. Overrides apply only to types in this run and use the same chunk and PIT validation as `SaveSetup`.
 
-Output: `Run` for the new running, partial run.
+The call is rejected when another run is running or paused. Output: `Run` for the new running, partial run, including `runConfig`.
 
 ### PauseRun
 
@@ -135,7 +167,7 @@ Output: `Run` with `status` `running`. Reject a run that is not paused.
 Input:
 
 - `RunId`
-- `RecordType`: empty for all, or one of the three values
+- `RecordType`: empty for all, or one record type from the run
 - `Check`: empty for all, or `siebel_only`, `es_only`, `stale`
 - `IdQuery`: case-insensitive substring of the row id, or empty
 - `Page`: 1-based page number as a string
@@ -148,7 +180,7 @@ Output:
 - `Page`
 - `PageSize`
 
-Stable order: record type (Individual, Entity, Opportunity), then check (siebel_only, es_only, stale), then id.
+Stable order: type order from the run config, then check (siebel_only, es_only, stale), then id.
 
 ### CompareRuns
 
@@ -183,7 +215,7 @@ Header:
 id,record_type,check,siebel_last_updated,es_last_updated,name
 ```
 
-`record_type` is the stored value (`Opportunity`, not Lead). Quote fields that contain commas or quotes. The UI can also build this CSV from finding rows when it is using the mock.
+`record_type` is the value stored on the setup row. Quote fields that contain commas or quotes. The UI can also build this CSV from finding rows when it is using the mock.
 
 ## Errors
 

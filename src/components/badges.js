@@ -1,8 +1,14 @@
 import { labelForCheck, labelForRecordType, labelForStatus } from "../config";
 
+const BADGE_KINDS = {
+  individual: "individual",
+  entity: "entity",
+  opportunity: "opportunity",
+};
+
 export function RecordTypeBadge({ recordType }) {
   const label = labelForRecordType(recordType);
-  const kind = String(recordType || "unknown").toLowerCase();
+  const kind = BADGE_KINDS[String(recordType || "").toLowerCase()] || "other";
   return <span className={`bspre-badge bspre-badge-${kind}`}>{label}</span>;
 }
 

@@ -26,9 +26,15 @@
   line-height: 1.3;
 }
 
-.bspre-recon-host h2 {
+.bspre-recon-host h2,
+.bspre-recon-host h3 {
   font-size: 15px;
   margin-bottom: 6px;
+}
+
+.bspre-recon-host h3 {
+  font-size: 14px;
+  margin-top: 14px;
 }
 
 .bspre-recon-host p {
@@ -42,7 +48,8 @@
 
 .bspre-recon-host button,
 .bspre-recon-host input,
-.bspre-recon-host select {
+.bspre-recon-host select,
+.bspre-recon-host textarea {
   font: inherit;
   color: inherit;
 }
@@ -328,9 +335,65 @@
   color: #3730a3;
 }
 
-.bspre-recon-host .bspre-badge-opportunity {
+.bspre-recon-host .bspre-badge-opportunity,
+.bspre-recon-host .bspre-badge-other {
   background: #fde7c7;
   color: #8a4b08;
+}
+
+.bspre-recon-host .bspre-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px 14px;
+  margin: 8px 0 12px;
+}
+
+.bspre-recon-host .bspre-fields label {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  font-size: 12px;
+  color: #3d4f4f;
+}
+
+.bspre-recon-host .bspre-fields label.bspre-check {
+  flex-direction: row;
+  align-items: center;
+  align-self: end;
+}
+
+.bspre-recon-host .bspre-fields input:not([type="checkbox"]) {
+  width: 100%;
+  min-width: 0;
+}
+
+.bspre-recon-host .bspre-wide {
+  grid-column: 1 / -1;
+}
+
+.bspre-recon-host .bspre-hint {
+  color: #5c6c6c;
+  font-size: 11px;
+  margin: 2px 0 0;
+}
+
+.bspre-recon-host .bspre-scroll {
+  overflow-x: auto;
+  margin-bottom: 14px;
+}
+
+.bspre-recon-host .bspre-scroll table {
+  margin-bottom: 0;
+}
+
+.bspre-recon-host details {
+  margin: 8px 0 12px;
+}
+
+.bspre-recon-host summary {
+  cursor: pointer;
+  font-weight: 600;
 }
 
 .bspre-recon-host .bspre-badge-partial {

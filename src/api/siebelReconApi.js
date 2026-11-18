@@ -1,7 +1,10 @@
+import { presentSetups } from "../setupRows";
 import {
   normalizeFilters,
   normalizePage,
   normalizeRecordTypes,
+  normalizeSetups,
+  normalizeStartOverrides,
   normalizeTolerance,
   ReconApiError,
 } from "./contract";
@@ -42,10 +45,12 @@ function cleanRun(run) {
   if (!run || typeof run !== "object") {
     throw new ReconApiError("Siebel returned an unreadable run.");
   }
+  const runConfig = readJson(run.runConfig, []);
   return {
     ...run,
     errorMessage: run.errorMessage || null,
     endedAt: run.endedAt || null,
+    runConfig: Array.isArray(runConfig) ? presentSetups(runConfig) : [],
   };
 }
 
@@ -98,13 +103,43 @@ export function createSiebelReconApi(config = {}, deps = {}) {
     return cleanRun(readJson(payload.Run, null));
   }
 
-  async function startRun({ recordTypes, options } = {}) {
+  async function getSetup() {
+    const payload = await call("GetSetup", {});
+    const setups = readJson(payload.Setups, []);
+    if (!Array.isArray(setups)) {
+      throw new ReconApiError("Siebel returned an unreadable setup list.");
+    }
+    return {
+      setups: presentSetups(setups),
+      source: payload.Source === "seed" ? "seed" : "table",
+    };
+  }
+
+  async function saveSetup(setups, options = {}) {
+    const rows = normalizeSetups(setups, options.existingBusComps || []);
+    const payload = await call("SaveSetup", { Setups: JSON.stringify(rows) });
+    const saved = readJson(payload.Setups, []);
+    if (!Array.isArray(saved)) {
+      throw new ReconApiError("Siebel returned an unreadable setup list.");
+    }
+    return {
+      setups: presentSetups(saved),
+      source: payload.Source === "seed" ? "seed" : "table",
+    };
+  }
+
+  async function startRun({ recordTypes, options, setup } = {}) {
     const types = normalizeRecordTypes(recordTypes);
     const toleranceSeconds = normalizeTolerance(options);
-    const payload = await call("StartRun", {
-      RecordTypes: types.join(","),
-      ToleranceSeconds: String(toleranceSeconds),
-    });
+    const overrides = normalizeStartOverrides(setup);
+    const props = { ToleranceSeconds: String(toleranceSeconds) };
+    if (types.length) {
+      props.RecordTypes = types.join(",");
+    }
+    if (overrides.length) {
+      props.Setup = JSON.stringify(overrides);
+    }
+    const payload = await call("StartRun", props);
     return cleanRun(readJson(payload.Run, null));
   }
 
@@ -169,6 +204,8 @@ export function createSiebelReconApi(config = {}, deps = {}) {
   return {
     listRuns,
     getRun,
+    getSetup,
+    saveSetup,
     startRun,
     pauseRun,
     resumeRun,

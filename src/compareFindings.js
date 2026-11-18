@@ -1,17 +1,23 @@
-import { CHECKS, RECORD_TYPES } from "./config";
+import { CHECKS } from "./config";
 
-const TYPE_ORDER = new Map(RECORD_TYPES.map((type, index) => [type.value, index]));
 const CHECK_ORDER = new Map(CHECKS.map((check, index) => [check.value, index]));
 
 export function findingKey(finding) {
   return `${finding.recordType}|${finding.id}|${finding.check}`;
 }
 
-export function sortFindings(findings) {
-  return [...findings].sort((a, b) => {
-    const typeDelta = (TYPE_ORDER.get(a.recordType) ?? 99) - (TYPE_ORDER.get(b.recordType) ?? 99);
-    if (typeDelta !== 0) {
-      return typeDelta;
+export function sortFindings(findings, typeOrder) {
+  const order = new Map((typeOrder || []).map((type, index) => [type, index]));
+  return [...(findings || [])].sort((a, b) => {
+    const aKnown = order.has(a.recordType);
+    const bKnown = order.has(b.recordType);
+    const aRank = aKnown ? order.get(a.recordType) : 1000;
+    const bRank = bKnown ? order.get(b.recordType) : 1000;
+    if (aRank !== bRank) {
+      return aRank - bRank;
+    }
+    if (!aKnown && !bKnown && a.recordType !== b.recordType) {
+      return String(a.recordType).localeCompare(String(b.recordType));
     }
     const checkDelta = (CHECK_ORDER.get(a.check) ?? 99) - (CHECK_ORDER.get(b.check) ?? 99);
     if (checkDelta !== 0) {
@@ -26,7 +32,7 @@ export function sortFindings(findings) {
  * New rows are only in current. Resolved rows are only in baseline.
  * Still-open rows are in both. The current row is kept for still-open and new.
  */
-export function compareFindings(baseline, current) {
+export function compareFindings(baseline, current, typeOrder) {
   const baseMap = new Map();
   const currentMap = new Map();
   (baseline || []).forEach((finding) => {
@@ -53,8 +59,8 @@ export function compareFindings(baseline, current) {
   });
 
   return {
-    newFindings: sortFindings(added),
-    resolved: sortFindings(resolved),
-    stillOpen: sortFindings(stillOpen),
+    newFindings: sortFindings(added, typeOrder),
+    resolved: sortFindings(resolved, typeOrder),
+    stillOpen: sortFindings(stillOpen, typeOrder),
   };
 }

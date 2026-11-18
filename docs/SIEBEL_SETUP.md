@@ -60,6 +60,22 @@ Type, parent category, and sequence should otherwise match the existing views on
 
 Add `BSPRE Elasticsearch Recon View` to every responsibility that already shows Job Runs and Bulk Jobs on Administration - Elasticsearch. Siebel Administrator is the usual starting point. Users without the view do not see the Recon tab.
 
+## System preference
+
+`BSPRE Elasticsearch Recon URL` is the only new system preference. Set it to the Elasticsearch base URL plus the alias, for example `https://<es-host>:9200/bloomspire`. Trailing slashes are trimmed. Index calls append `/_count`, `/_search`, or `/_pit?keep_alive=...` to that URL.
+
+Recon reuses the existing Elasticsearch user and password preferences. Chunk size, PIT keep-alive, and search spec are not system preferences, and they are not columns on the run header. They live on the setup row and on the run's config snapshot.
+
+## Setup and run config tables
+
+`CX_ES_RCN_SETUP` is the standalone setup table, one row per business component. Admins edit it from the React Setup screen (`GetSetup`, `SaveSetup`) or from the setup list. The table is not deleted from; set Active to false to keep a business component out of new runs. When the table is empty, `GetSetup` returns the built-in defaults and `Source` `seed` without writing them. Saving persists the rows and later calls return `Source` `table`.
+
+`CX_ES_RCN_RUN_CFG` is the read-only snapshot of the setup a run used, one row per business component, with the run id. `GetRun` returns it as `runConfig`. The React run summary shows that snapshot and does not treat it as editable. Changing setup after a run starts does not change that run.
+
+Both tables use the same business columns: active flag, business component, business object, integration object, record type, type order, search spec (blank means every record of that business component), chunk size (default 500, valid 1 through 5000), PIT keep-alive (default `10m`, a whole number plus `s`, `m`, `h`, or `d`), ES type path and value, ES id path (default `_id`), ES updated path, Siebel name fields, and ES name paths.
+
+The built-in defaults, used only when no setup rows are saved or none are active, are Individual / Contact, Entity / Account, and Opportunity / Opportunity. Other record types are additional setup rows. The React app does not keep its own list of record types.
+
 ## After deployment
 
 Open Administration - Elasticsearch. The first tab is Recon. Job Runs and Bulk Jobs stay on the screen. Starting a run calls `BSPRE Elasticsearch Recon`. Until that service is deployed, build the bundle with `BSPRE_RECON_API=mock` only for a local demo. A production bundle should use the default Siebel client.

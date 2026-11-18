@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { findingCount } from "../counts";
 import { labelForRecordType } from "../config";
+import { recordTypesFromRuns } from "../setupRows";
 import { StatusBadge } from "./badges";
 import { ErrorNote, LoadingNote } from "./notices";
 
@@ -33,6 +34,8 @@ export function RunHistory({ api }) {
     };
   }, [api]);
 
+  const typeColumns = recordTypesFromRuns(runs || []);
+
   return (
     <section data-screen="history">
       <h2>Run history</h2>
@@ -49,15 +52,17 @@ export function RunHistory({ api }) {
               <th scope="col">Started</th>
               <th scope="col">Ended</th>
               <th scope="col">Run by</th>
-              <th scope="col">Individual</th>
-              <th scope="col">Entity</th>
-              <th scope="col">Lead</th>
+              {typeColumns.map((type) => (
+                <th key={type} scope="col">
+                  {labelForRecordType(type)}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {runs.length === 0 ? (
               <tr>
-                <td colSpan={8}>No runs yet.</td>
+                <td colSpan={5 + typeColumns.length}>No runs yet.</td>
               </tr>
             ) : (
               runs.map((run) => (
@@ -71,7 +76,7 @@ export function RunHistory({ api }) {
                   <td>{displayTime(run.startedAt)}</td>
                   <td>{displayTime(run.endedAt)}</td>
                   <td>{run.startedBy}</td>
-                  {["Individual", "Entity", "Opportunity"].map((type) => (
+                  {typeColumns.map((type) => (
                     <td key={type} className="bspre-num">
                       <span className="bspre-sr">{labelForRecordType(type)} findings </span>
                       {findingCount(run.counts && run.counts[type])}

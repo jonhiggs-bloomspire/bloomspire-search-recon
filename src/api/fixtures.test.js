@@ -1,4 +1,4 @@
-import { isKnownRecordType, CHECKS } from "../config";
+import { CHECKS } from "../config";
 import { isStale, parseSiebelDateTime } from "../dates";
 import { buildCounts } from "../counts";
 import { RUN_IDS, createSeedState } from "./fixtures";
@@ -11,7 +11,8 @@ test("seeded runs use the three record types and parseable Siebel timestamps", (
   state.runs.forEach((run) => {
     expect(["running", "paused", "done", "error"]).toContain(run.status);
     expect(run.partial).toBe(run.status !== "done");
-    expect(run.recordTypes.every(isKnownRecordType)).toBe(true);
+    expect(run.runConfig.map((row) => row.recordType)).toEqual(expect.arrayContaining(run.recordTypes));
+    expect(run.runConfig.every((row) => row.busComp && row.chunkSize && row.pitKeepAlive)).toBe(true);
     expect(parseSiebelDateTime(run.startedAt)).not.toBeNull();
     if (run.endedAt) {
       expect(parseSiebelDateTime(run.endedAt)).not.toBeNull();
@@ -27,7 +28,7 @@ test("seeded runs use the three record types and parseable Siebel timestamps", (
       )
     );
     findings.forEach((finding) => {
-      expect(isKnownRecordType(finding.recordType)).toBe(true);
+      expect(run.recordTypes).toContain(finding.recordType);
       expect(CHECK_VALUES).toContain(finding.check);
       if (finding.siebelLastUpdated) {
         expect(parseSiebelDateTime(finding.siebelLastUpdated)).not.toBeNull();
@@ -44,6 +45,14 @@ test("seeded runs use the three record types and parseable Siebel timestamps", (
   });
   const current = state.findings[RUN_IDS.current];
   expect(current.some((finding) => finding.siebelLastUpdated === "11/5/2025 11:41:37 AM")).toBe(true);
+  const currentRun = state.runs.find((run) => run.id === RUN_IDS.current);
+  expect(currentRun.runConfig.find((row) => row.busComp === "Contact")).toMatchObject({
+    searchSpec: '[Last Name] = "Hale"',
+    chunkSize: 250,
+    pitKeepAlive: "5m",
+  });
+  expect(state.setupSource).toBe("seed");
+  expect(state.setups.map((row) => row.busComp)).toEqual(["Contact", "Account", "Opportunity"]);
 });
 
 test("seed copies do not share nested state", () => {

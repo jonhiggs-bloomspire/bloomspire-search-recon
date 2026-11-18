@@ -15,7 +15,7 @@ Jest runs every `*.test.js` file in jsdom with Babel and Testing Library. `npm t
 - CSV builder: commas, quotes, empty cells, and a leading formula character. `record_type` stays `Opportunity`.
 - Siebel client: service URL, `{"body": ...}` wrapper, Basic header only when a username is set, method property sets, compare `new` mapping, HTTP errors, and the `ERROR` property. URLs stay on the Siebel REST path.
 - Physical renderer: one host inserted after `#s_<GetFullId>_div`, applet hidden, ShowUI and BindData refresh reuse that host, EndLife unmounts and restores the applet display, stale host replacement, script reload when `mount` is missing, window `BloomspireSearchRecon.mount`, and a load that finishes after EndLife.
-- Screens with the mock: setup, history, completed summary, paused summary with progress and resume, findings filters and paging, View detail links, CSV export, and compare.
+- Screens with the mock: setup list, seed notice, client validation, save, deactivate, start with the active setup, per-component overrides, history, completed summary with read-only run config, paused summary with progress and resume, findings filters from the run's record types, View detail links, CSV export, and compare.
 - CSS selectors in `src/styles.css` include `.bspre-recon-host`. The production entry does not import the dev frame stylesheet.
 
 ## Renderer tests

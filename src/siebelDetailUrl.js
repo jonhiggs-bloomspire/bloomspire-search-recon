@@ -1,8 +1,8 @@
 export const SIEBEL_APP_PATH = "/siebel/app/callcenter/enu";
 
 /**
- * Standard detail view and applet for each recon record type.
- * The stored record type for a lead is Opportunity.
+ * Detail view and applet for record types whose Siebel view is known.
+ * Other record types have no link until a view is configured for them.
  */
 export const SIEBEL_DETAIL_VIEWS = {
   Individual: {
